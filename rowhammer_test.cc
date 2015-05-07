@@ -29,12 +29,12 @@
 
 
 const size_t mem_size = 1 << 30;
-const int toggles = 540000;
+const int toggles = 1024*1024;
 
 char *g_mem;
 
 char *pick_addr() {
-  size_t offset = (rand() << 12) % mem_size;
+  size_t offset = (rand() << 18) % mem_size;
   return g_mem + offset;
 }
 
@@ -60,10 +60,10 @@ class Timer {
   }
 
   void print_iters(uint64_t iterations) {
-    double total_time = get_diff();
-    double iter_time = total_time / iterations;
-    printf("  %.3f nanosec per iteration: %g sec for %" PRId64 " iterations\n",
-           iter_time * 1e9, total_time, iterations);
+//    double total_time = get_diff();
+//    double iter_time = total_time / iterations;
+//    printf("  %.3f nanosec per iteration: %g sec for %" PRId64 " iterations\n",
+//           iter_time * 1e9, total_time, iterations);
   }
 };
 
@@ -104,10 +104,10 @@ void main_prog() {
   int iter = 0;
   for (;;) {
     printf("Iteration %i (after %.2fs)\n", iter++, t.get_diff());
-    toggle(10, 8);
+    toggle(10, 14);
 
     Timer check_timer;
-    printf("check\n");
+    //printf("check\n");
     uint64_t *end = (uint64_t *) (g_mem + mem_size);
     uint64_t *ptr;
     int errors = 0;
@@ -118,7 +118,7 @@ void main_prog() {
         errors++;
       }
     }
-    printf("  (check took %fs)\n", check_timer.get_diff());
+    //printf("  (check took %fs)\n", check_timer.get_diff());
     if (errors)
       exit(1);
   }
