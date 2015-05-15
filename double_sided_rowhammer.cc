@@ -48,7 +48,7 @@
 namespace {
 
 // The fraction of physical memory that should be mapped for testing.
-double fraction_of_physical_memory = 0.3;
+double fraction_of_physical_memory = 0.7;
 
 // The time to hammer before aborting. Defaults to one hour.
 uint64_t number_of_seconds_to_hammer = 3600;
@@ -208,6 +208,8 @@ uint64_t hammer_congruent(uint8_t* first, const std::vector<uint8_t*>& pages,siz
   uint64_t number_of_reads = 32ULL*NUMBER_OF_READS;
   volatile uint64_t* f0 = (volatile uint64_t*) first;
   
+  volatile uint64_t* f15 = (volatile uint64_t*) pages.at(14+poff);
+  volatile uint64_t* f14 = (volatile uint64_t*) pages.at(13+poff);
   volatile uint64_t* f13 = (volatile uint64_t*) pages.at(12+poff);
   volatile uint64_t* f12 = (volatile uint64_t*) pages.at(11+poff);
   volatile uint64_t* f11 = (volatile uint64_t*) pages.at(10+poff);
@@ -244,8 +246,7 @@ uint64_t hammer_congruent(uint8_t* first, const std::vector<uint8_t*>& pages,siz
   if (delta < 100)
   {
     number_of_reads = 32ULL*NUMBER_OF_READS;
-    uint64_t sum = 0;
-    size_t t = rdtsc();
+    t = rdtsc();
     while (number_of_reads-- > 0) {
       sum += *(f0);
       sum += *(f1);
@@ -262,8 +263,57 @@ uint64_t hammer_congruent(uint8_t* first, const std::vector<uint8_t*>& pages,siz
       sum += *(f12);
       sum += *(f13);
     }
-    size_t delta = (rdtsc() - t) / (32ULL*NUMBER_OF_READS);
+    delta = (rdtsc() - t) / (32ULL*NUMBER_OF_READS);
     printf("%zu ",delta);
+    if (delta < 100)
+    {
+      number_of_reads = 32ULL*NUMBER_OF_READS;
+      t = rdtsc();
+      while (number_of_reads-- > 0) {
+        sum += *(f0);
+        sum += *(f1);
+        sum += *(f2);
+        sum += *(f3);
+        sum += *(f4);
+        sum += *(f5);
+        sum += *(f6);
+        sum += *(f7);
+        sum += *(f8);
+        sum += *(f9);
+        sum += *(f10);
+        sum += *(f11);
+        sum += *(f12);
+        sum += *(f13);
+        sum += *(f14);
+      }
+      delta = (rdtsc() - t) / (32ULL*NUMBER_OF_READS);
+      printf("%zu ",delta);
+      if (delta < 100)
+      {
+        number_of_reads = 32ULL*NUMBER_OF_READS;
+        t = rdtsc();
+        while (number_of_reads-- > 0) {
+          sum += *(f0);
+          sum += *(f1);
+          sum += *(f2);
+          sum += *(f3);
+          sum += *(f4);
+          sum += *(f5);
+          sum += *(f6);
+          sum += *(f7);
+          sum += *(f8);
+          sum += *(f9);
+          sum += *(f10);
+          sum += *(f11);
+          sum += *(f12);
+          sum += *(f13);
+          sum += *(f14);
+          sum += *(f15);
+        }
+        delta = (rdtsc() - t) / (32ULL*NUMBER_OF_READS);
+        printf("%zu ",delta);
+      }
+    }
   }
   return sum;
 }
@@ -303,7 +353,7 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
   }
   printf("Done\n");
   // We should have some pages for most rows now.
-  for (uint64_t row_index = 1024; row_index + 2 < pages_per_row.size(); 
+  for (uint64_t row_index = 64; row_index + 2 < pages_per_row.size(); 
       ++row_index) {
     bool cont = false;
     for (int64_t offset = -64; offset < 64; ++offset)
@@ -324,6 +374,7 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
         pages_per_row[row_index+2].size());
     // Iterate over all pages we have for the first row.
     for (int frp = 63; frp > 0; --frp) {
+      int rounds_without_bitflip = 0;
       congruent_pages.clear();
       uint8_t* first_row_page = pages_per_row[row_index].at(frp);
       // Iterate over all pages we have for the second row.
@@ -334,6 +385,11 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
         uint64_t phys2 = get_physical_addr((uint64_t)memory_mapping + sec);
         if (phys2 / ROW_SIZE == phys1 / ROW_SIZE || !in_same_cache_set(phys1, phys2, -1))
           continue;
+        if (rounds_without_bitflip > 16)
+        {
+          frp = 0;
+          break;
+        }
         //printf("%zx %zx\n", phys1, phys2);
         uint8_t* second_row_page = (uint8_t*)memory_mapping + sec;
         bool repeated = false;
@@ -353,6 +409,8 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
             reinterpret_cast<uint64_t>(second_row_page+0x1000));
         hammer(first_page_range, second_page_range, number_of_reads);
         // Now check the target pages.
+        if (rounds_without_bitflip >= 0)
+          rounds_without_bitflip++;
         uint64_t number_of_bitflips_in_target = 0;
         int32_t offset = -63;
         for (; offset < 64; offset += 2)
@@ -362,6 +420,7 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
               ++number_of_bitflips_in_target;
               printf("0x%X != 0xFF  ", target_page[index]);
               flip = target_page + index;
+              rounds_without_bitflip = -1;
               goto done;
             }
           }
@@ -380,8 +439,8 @@ done:
             goto repeat;
           }
           congruent_pages.push_back(second_row_page);
-          if (congruent_pages.size() > 12) {
-            for (size_t poff = congruent_pages.size()-13; poff < congruent_pages.size()-12; ++poff)
+          if (congruent_pages.size() >= 15) {
+            for (size_t poff = congruent_pages.size()-15; poff <= congruent_pages.size()-15; ++poff)
             {
               // Set all the target pages to 0xFF.
               for (int32_t offset = -63; offset < 64; offset += 2)        

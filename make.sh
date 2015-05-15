@@ -16,7 +16,7 @@
 
 set -eu
 
-cflags="-g -Wall -O3 -pthread"
+cflags="-g -Wall -O2 -pthread"
 
 g++ $cflags rowhammer_test.cc -o rowhammer_test
 g++ $cflags -std=c++11 double_sided_rowhammer.cc -o double_sided_rowhammer
