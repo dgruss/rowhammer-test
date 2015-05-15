@@ -61,7 +61,7 @@ std::vector<std::vector<uint8_t*>> pages_per_row;
 std::vector<uint8_t*> congruent_pages;
   
 // The number of memory reads to try.
-#define NUMBER_OF_READS (1024*1024)
+#define NUMBER_OF_READS (1024ULL*1024ULL)
 uint64_t number_of_reads = NUMBER_OF_READS;
 
 // Obtain the size of the physical memory of the system.
@@ -204,10 +204,11 @@ uint64_t HammerAddressesStandard(
   return sum;
 }
 
-uint64_t hammer_congruent(uint8_t* first, const std::vector<uint8_t*>& pages,size_t poff,uint64_t number_of_reads) {
+uint64_t hammer_congruent(uint8_t* first, const std::vector<uint8_t*>& pages,size_t poff) {
+  uint64_t number_of_reads = 32ULL*NUMBER_OF_READS;
   volatile uint64_t* f0 = (volatile uint64_t*) first;
   
-  //volatile uint64_t* f13 = (volatile uint64_t*) pages.at(12+poff);
+  volatile uint64_t* f13 = (volatile uint64_t*) pages.at(12+poff);
   volatile uint64_t* f12 = (volatile uint64_t*) pages.at(11+poff);
   volatile uint64_t* f11 = (volatile uint64_t*) pages.at(10+poff);
   volatile uint64_t* f10 = (volatile uint64_t*) pages.at(9+poff);
@@ -222,7 +223,7 @@ uint64_t hammer_congruent(uint8_t* first, const std::vector<uint8_t*>& pages,siz
   volatile uint64_t* f1 = (volatile uint64_t*) pages.at(0+poff);
   
   uint64_t sum = 0;
-  //size_t t = rdtsc();
+  size_t t = rdtsc();
   while (number_of_reads-- > 0) {
     sum += *(f0);
     sum += *(f1);
@@ -237,10 +238,33 @@ uint64_t hammer_congruent(uint8_t* first, const std::vector<uint8_t*>& pages,siz
     sum += *(f10);
     sum += *(f11);
     sum += *(f12);
-    //sum += *(f13);
   }
-  //size_t delta = (rdtsc() - t) / (NUMBER_OF_READS);
-  //printf("%zu ",delta);
+  size_t delta = (rdtsc() - t) / (32ULL*NUMBER_OF_READS);
+  printf("%zu ",delta);
+  if (delta < 100)
+  {
+    number_of_reads = 32ULL*NUMBER_OF_READS;
+    uint64_t sum = 0;
+    size_t t = rdtsc();
+    while (number_of_reads-- > 0) {
+      sum += *(f0);
+      sum += *(f1);
+      sum += *(f2);
+      sum += *(f3);
+      sum += *(f4);
+      sum += *(f5);
+      sum += *(f6);
+      sum += *(f7);
+      sum += *(f8);
+      sum += *(f9);
+      sum += *(f10);
+      sum += *(f11);
+      sum += *(f12);
+      sum += *(f13);
+    }
+    size_t delta = (rdtsc() - t) / (32ULL*NUMBER_OF_READS);
+    printf("%zu ",delta);
+  }
   return sum;
 }
 const uint8_t* flip = 0;
@@ -312,6 +336,8 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
           continue;
         //printf("%zx %zx\n", phys1, phys2);
         uint8_t* second_row_page = (uint8_t*)memory_mapping + sec;
+        bool repeated = false;
+        repeat:
         // Set all the target pages to 0xFF.
         for (int32_t offset = -63; offset < 64; offset += 2)        
         for (uint8_t* target_page : pages_per_row[row_index+offset]) {
@@ -342,15 +368,20 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
         }
 done:
         if (number_of_bitflips_in_target > 0) {
-          printf("[!] Found %ld flips in row %ld (%lx) when hammering "
-              "%lx (%p) and %lx (%p)\n", number_of_bitflips_in_target, row_index+offset,
+          printf("[!] Found %ld %sflips in row %ld (%lx) when hammering "
+              "%lx (%p) and %lx (%p)\n", number_of_bitflips_in_target, repeated ? "repeatable " : "", row_index+offset,
               GetPageFrameNumber(pagemap, (uint8_t*)flip)*0x1000+(((size_t)flip)%0x1000),
               GetPageFrameNumber(pagemap, first_row_page)*0x1000, first_row_page,
               GetPageFrameNumber(pagemap, second_row_page)*0x1000, second_row_page);
           total_bitflips += number_of_bitflips_in_target;
+          if (!repeated)
+          {
+            repeated = true;
+            goto repeat;
+          }
           congruent_pages.push_back(second_row_page);
-          if (congruent_pages.size() > 11) {
-            for (size_t poff = 0; poff < congruent_pages.size()-11; ++poff)
+          if (congruent_pages.size() > 12) {
+            for (size_t poff = congruent_pages.size()-13; poff < congruent_pages.size()-12; ++poff)
             {
               // Set all the target pages to 0xFF.
               for (int32_t offset = -63; offset < 64; offset += 2)        
@@ -358,7 +389,7 @@ done:
                   memset(target_page, 0xFF, 0x1000);
               }
 
-              hammer_congruent(first_row_page, congruent_pages, poff, 64*number_of_reads);
+              hammer_congruent(first_row_page, congruent_pages, poff);
               // Now check the target pages.
               uint64_t number_of_bitflips_in_target = 0;
               int32_t offset = -63;
@@ -380,6 +411,7 @@ done:
                     GetPageFrameNumber(pagemap, (uint8_t*)flip)*0x1000+(((size_t)flip)%0x1000),
                     GetPageFrameNumber(pagemap, first_row_page)*0x1000, first_row_page);
                 total_bitflips += number_of_bitflips_in_target;
+                exit(0);
               }
             }
           }
