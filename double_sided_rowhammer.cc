@@ -48,7 +48,7 @@
 namespace {
 
 // The fraction of physical memory that should be mapped for testing.
-double fraction_of_physical_memory = 0.5;
+double fraction_of_physical_memory = 0.7;
 
 // The time to hammer before aborting. Defaults to one hour.
 uint64_t number_of_seconds_to_hammer = 3600;
@@ -60,7 +60,7 @@ uint64_t number_of_seconds_to_hammer = 3600;
 std::vector<std::vector<uint8_t*>> pages_per_row;
   
 // The number of memory reads to try.
-#define NUMBER_OF_READS (50*1024*1024)
+#define NUMBER_OF_READS (64*1024*1024)
 uint64_t number_of_reads = NUMBER_OF_READS;
 
 // Obtain the size of the physical memory of the system.
@@ -188,6 +188,7 @@ void pick(volatile uint64_t** addrs, int step)
 {
   uint8_t* buf = (uint8_t*) addrs[0];
   uint64_t phys1 = get_physical_addr((uint64_t)buf);
+  printf("%u: %zx\n",0, phys1);
   uint64_t presumed_row_index = phys1 / (1024*256);
   int found = 1;
   presumed_row_index += step;
@@ -195,9 +196,9 @@ void pick(volatile uint64_t** addrs, int step)
   {
     for (uint8_t* second_row_page : pages_per_row[presumed_row_index]) {
       uint64_t phys2 = get_physical_addr((uint64_t)second_row_page);
-      if (((phys2 / ROW_SIZE) % 4) == ((phys1 / ROW_SIZE) % 4) && in_same_cache_set(phys1, phys2, -1)) {
+      if ((phys2 & 0x1C0000) == 0 && /*phys2 / ROW_SIZE != (uint64_t)addrs[found] / ROW_SIZE &&*/ in_same_cache_set(phys1, phys2, -1)) {
         addrs[found] = (uint64_t*)second_row_page;
-        //printf("%zx %zx\n",phys1, phys2);
+        printf("%u: %zx\n",found, phys2);
         found++;
       }
     }
@@ -209,21 +210,7 @@ volatile uint64_t* faddrs[ADDR_COUNT];
 volatile uint64_t* saddrs[ADDR_COUNT];
 
 void HammerThread() {
-return;
-  while (saddrs[14] == 0);  
-  while (1)
-  {
-    uint64_t sum = 0;
-    uint64_t number_of_reads = NUMBER_OF_READS/4;
-    volatile uint64_t* s0 = saddrs[0];
-    volatile uint64_t* s1 = saddrs[1];
-    while (number_of_reads-- > 0) {
-      sum += *(s0);
-      sum += *(s1);
-      asm volatile("clflush (%0)" : : "r" (s0) : "memory");
-      asm volatile("clflush (%0)" : : "r" (s1) : "memory");
-    }
-  }
+  return;
 }
 
 uint64_t HammerAddressesStandard(
@@ -232,79 +219,53 @@ uint64_t HammerAddressesStandard(
     uint64_t number_of_reads) {
 
   faddrs[0] = (uint64_t*) first_range.first;
-  saddrs[0] = (uint64_t*) second_range.first;
 
   pick(faddrs,-1);
-  pick(saddrs,-1);
   
-  volatile uint64_t* f0 = faddrs[0];
-  volatile uint64_t* f1 = faddrs[1];
-  volatile uint64_t* f2 = faddrs[2];
-  volatile uint64_t* f3 = faddrs[3];
-  volatile uint64_t* f4 = faddrs[4];
-  volatile uint64_t* f5 = faddrs[5];
-  volatile uint64_t* f6 = faddrs[6];
-  volatile uint64_t* f7 = faddrs[7];
-  volatile uint64_t* f8 = faddrs[8];
-  volatile uint64_t* f9 = faddrs[9];
-  volatile uint64_t* f10 = faddrs[10];
-  volatile uint64_t* f11 = faddrs[11];
-  volatile uint64_t* f12 = faddrs[12];
-  volatile uint64_t* f13 = faddrs[13];
   volatile uint64_t* f14 = faddrs[14];
-  volatile uint64_t* s0 = saddrs[0];
-  volatile uint64_t* s1 = saddrs[1];
-  volatile uint64_t* s2 = saddrs[2];
-  volatile uint64_t* s3 = saddrs[3];
-  volatile uint64_t* s4 = saddrs[4];
-  volatile uint64_t* s5 = saddrs[5];
-  volatile uint64_t* s6 = saddrs[6];
-  volatile uint64_t* s7 = saddrs[7];
-  volatile uint64_t* s8 = saddrs[8];
-  volatile uint64_t* s9 = saddrs[9];
-  volatile uint64_t* s10 = saddrs[10];
-  volatile uint64_t* s11 = saddrs[11];
-  volatile uint64_t* s12 = saddrs[12];
-  volatile uint64_t* s13 = saddrs[13];
-  volatile uint64_t* s14 = saddrs[14];
+  volatile uint64_t* f13 = faddrs[13];
+  volatile uint64_t* f12 = faddrs[12];
+  volatile uint64_t* f11 = faddrs[11];
+  volatile uint64_t* f10 = faddrs[10];
+  volatile uint64_t* f9 = faddrs[9];
+  volatile uint64_t* f8 = faddrs[8];
+  volatile uint64_t* f7 = faddrs[7];
+  volatile uint64_t* f6 = faddrs[6];
+  volatile uint64_t* f5 = faddrs[5];
+  volatile uint64_t* f4 = faddrs[4];
+  volatile uint64_t* f3 = faddrs[3];
+  volatile uint64_t* f2 = faddrs[2];
+  volatile uint64_t* f1 = faddrs[1];
+  volatile uint64_t* f0 = faddrs[0];
   
   uint64_t sum = 0;
   size_t t = rdtsc();
   while (number_of_reads-- > 0) {
-    sum += *(f12);
-    //sum += *(s12);
+/*    sum += *(f12);
     sum += *(f11);
-    //sum += *(s11);
     sum += *(f10);
-    //sum += *(s10);
     sum += *(f9);
-    //sum += *(s9);
     sum += *(f8);
-    //sum += *(s8);
     sum += *(f7);
-    //sum += *(s7);
     sum += *(f6);
-    //sum += *(s6);
     sum += *(f5);
-    //sum += *(s5);
     sum += *(f4);
-    //sum += *(s4);
     sum += *(f3);
-    //sum += *(s3);
     sum += *(f2);
-    //sum += *(s2);
-    sum += *(f1);
-    //sum += *(s1);
+    sum += *(f1);*/
     sum += *(f0);
-    sum += *(s0);
-    //asm volatile("clflush (%0)" : : "r" (f0) : "memory");
-    asm volatile("clflush (%0)" : : "r" (s0) : "memory");
-    //asm volatile("clflush (%0)" : : "r" (f1) : "memory");
-    //asm volatile("clflush (%0)" : : "r" (s1) : "memory");
-    /*asm volatile("clflush (%0)" : : "r" (f2) : "memory");
-    asm volatile("clflush (%0)" : : "r" (s2) : "memory");
-    asm volatile("clflush (%0)" : : "r" (f3) : "memory");
-    asm volatile("clflush (%0)" : : "r" (s3) : "memory");*/
+    sum += *(f1);
+    sum += *(f2);
+    sum += *(f3);
+    sum += *(f4);
+    sum += *(f5);
+    sum += *(f6);
+    sum += *(f7);
+    sum += *(f8);
+    sum += *(f9);
+    sum += *(f10);
+    sum += *(f11);
+    sum += *(f12);
   }
   size_t delta = (rdtsc() - t) / (NUMBER_OF_READS);
   printf("%zu ",delta);
@@ -352,7 +313,7 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
   pthread_create(&t,0,(void*(*)(void*))HammerThread,0);
   //pthread_create(&t,0,(void*(*)(void*))HammerThread,0);
   // We should have some pages for most rows now.
-  for (uint64_t row_index = 64; row_index + 2 < pages_per_row.size(); 
+  for (uint64_t row_index = 3664; row_index + 2 < pages_per_row.size(); 
       ++row_index) {
     bool cont = false;
     for (int64_t offset = -64; offset < 64; ++offset)
@@ -372,11 +333,10 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
         pages_per_row[row_index].size(), pages_per_row[row_index+1].size(), 
         pages_per_row[row_index+2].size());
     // Iterate over all pages we have for the first row.
-    for (uint8_t* first_row_page : pages_per_row[row_index]) {
+    for (int frp = 63; frp > 0; --frp) {
+      uint8_t* first_row_page = pages_per_row[row_index].at(frp);
       // Iterate over all pages we have for the second row.
-      for (uint8_t* second_row_page : pages_per_row[row_index+2]) {
-//        if ((((size_t)first_row_page) & 0x3FFFF) != (((size_t)second_row_page) & 0x3FFFF))
-//          continue;
+      uint8_t* second_row_page = pages_per_row[row_index+2].at(8);
         uint32_t offset_line = 0;
         // Set all the target pages to 0xFF.
         for (int32_t offset = -63; offset < 64; offset += 2)        
@@ -415,8 +375,6 @@ done:
               GetPageFrameNumber(pagemap, second_row_page)*0x1000+offset_line, second_row_page);
           total_bitflips += number_of_bitflips_in_target;
         }
-//      }
-      }
     }
   }
   return total_bitflips;
