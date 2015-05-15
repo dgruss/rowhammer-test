@@ -48,7 +48,7 @@
 namespace {
 
 // The fraction of physical memory that should be mapped for testing.
-double fraction_of_physical_memory = 0.6;
+double fraction_of_physical_memory = 0.3;
 
 // The time to hammer before aborting. Defaults to one hour.
 uint64_t number_of_seconds_to_hammer = 3600;
